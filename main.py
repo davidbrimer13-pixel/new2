@@ -1,41 +1,52 @@
-# Original upbeat pop-style loop for the BBC micro:bit (MakeCode Python).
-# This is an original pattern, not a transcription of Coldplay's song.
+# BBC micro:bit (MakeCode Python)
+# A+B starts/stops a square-wave output on P0.
+# A lowers the speed setting; B raises it. The setting is 1..9.
+# Each setting is about 5..45 pulses per second (higher is faster).
 #
-# micro:bit V2 is required for the built-in microphone. The LEDs show the
-# microphone's overall sound level; the top-left LED marks each bass beat.
-# The microphone measures overall volume, not bass frequencies specifically.
+# P0 is a low-voltage 3.3 V logic output. Connect only to suitable low-voltage
+# circuits and share GND. Never connect the micro:bit directly to mains or
+# another voltage source. Use suitable driver circuitry for loads such as motors.
 
-STEP_MS = 240  # eighth-note pulse, about 125 BPM
-SAMPLES_PER_STEP = 6
-SAMPLE_MS = STEP_MS // SAMPLES_PER_STEP
+OUTPUT_PIN = DigitalPin.P0
+speed = 1
+running = False
+output_state = 0
+previous_a = False
+previous_b = False
+previous_ab = False
 
-# One original 16-step instrumental phrase. The bass notes mark the pulse;
-# other notes make a simple upbeat accompaniment. Frequencies are in Hz.
-PATTERN = [
-    110, 392, 330, 392,
-    147, 440, 392, 330,
-    110, 392, 494, 440,
-    147, 392, 330, 294,
-]
+basic.show_number(speed)
 
 while True:
-    for step in range(len(PATTERN)):
-        music.stop_all_sounds()
-        music.ring_tone(PATTERN[step])
+    a_pressed = input.button_is_pressed(Button.A)
+    b_pressed = input.button_is_pressed(Button.B)
+    ab_pressed = a_pressed and b_pressed
 
-        # Sample while the note plays so the display reacts to the sound.
-        for sample in range(SAMPLES_PER_STEP):
-            level = input.sound_level()  # 0..255; requires micro:bit V2
-            led.plot_bar_graph(level, 255)
+    # Toggle only once per A+B press, not repeatedly while held.
+    if ab_pressed and not previous_ab:
+        running = not running
+        output_state = 0
+        pins.digital_write_pin(OUTPUT_PIN, 0)
 
-            # Mark the four bass beats in each bar. This is a timed beat
-            # marker; the microphone itself does not separate bass from treble.
-            if step % 4 == 0:
-                led.plot(0, 0)
-            else:
-                led.unplot(0, 0)
-            basic.pause(SAMPLE_MS)
+    # Adjust the speed once per individual button press. A+B takes priority.
+    if not ab_pressed:
+        if a_pressed and not previous_a:
+            speed = max(1, speed - 1)
+            basic.show_number(speed)
+        if b_pressed and not previous_b:
+            speed = min(9, speed + 1)
+            basic.show_number(speed)
 
-    music.stop_all_sounds()
-    basic.clear_screen()
-    basic.pause(250)
+    previous_a = a_pressed
+    previous_b = b_pressed
+    previous_ab = ab_pressed
+
+    if running:
+        # One high/low transition per half-period. At speed 1 this is about
+        # 5 Hz; at speed 9 it is about 45 Hz.
+        pins.digital_write_pin(OUTPUT_PIN, output_state)
+        output_state = 1 - output_state
+        basic.pause(100 // speed)
+    else:
+        pins.digital_write_pin(OUTPUT_PIN, 0)
+        basic.pause(10)
